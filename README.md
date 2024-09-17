@@ -134,4 +134,4 @@ Generates basic server code for the specified language.
   - **Solution**: Verify that your operating system (Windows, Linux, Darwin) is supported by the script or modify the script to handle your OS
 
 ## License
-This project is licensed under the GNU License. See the LICENSE file for details.
+This project is licensed under the GPL 3.0 License. See the LICENSE file for details.
