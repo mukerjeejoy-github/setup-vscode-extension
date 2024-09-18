@@ -6,6 +6,17 @@ import time
 import shutil
 import shlex
 
+LANGUAGE_FRAMEWORKS = {
+    "python": ["Flask", "Django", "FastAPI"],
+    "javascript": ["Express", "Koa", "Hapi"],
+    "typescript": ["Express", "Nest.js", "Koa"],
+    "c#": ["ASP.NET Core", "Nancy"],
+    "java": ["Spring Boot", "Quarkus", "Micronaut"],
+    "ruby": ["Ruby on Rails", "Sinatra"],
+    "php": ["Laravel", "Symfony", "Slim"],
+    "go": ["Gin", "Echo", "Fiber"]
+}
+
 def run_command(command, cwd=None, stream_output=False):
     """Run a shell command and print its output."""
     if platform.system() == "Windows":
@@ -169,7 +180,7 @@ def generate_extension_name_and_identifier(extension_name):
     identifier = extension_name.lower().replace(" ", "-")
     return extension_name, identifier
 
-def create_extension_project(extension_name):
+def create_extension_project(extension_name, extension_description):
     """Generate a new VSCode extension project using Yeoman."""
     print(f"Creating VSCode extension project '{extension_name}'...")
     try:
@@ -196,8 +207,8 @@ def create_extension_project(extension_name):
         print("Please ensure Yeoman is installed globally using 'npm install -g yo generator-code'")
         return
 
-    # Construct the command with correct flags
-    command = f'"{node_path}" "{yo_path}" code --type=ext-language-server --extensionName="{extension_name}" --extensionDisplayName="{extension_name}" --extensionDescription="A new VSCode extension" --extensionIdentifier="{identifier}" --gitInit=false --pkgManager=npm'
+    # Construct the command with correct flags, including the description
+    command = f'"{node_path}" "{yo_path}" code --type=ext-language-server --extensionName="{extension_name}" --extensionDisplayName="{extension_name}" --extensionDescription="{extension_description}" --extensionIdentifier="{identifier}" --gitInit=false --pkgManager=npm'
     
     print(f"Executing command: {command}")
 
@@ -227,11 +238,33 @@ def create_extension_project(extension_name):
     print("Project creation completed.")
 
 def setup_environment_for_language(language):
-    """Set up the environment based on the language chosen."""
+    """Set up the environment based on the language chosen and select a framework."""
+    if language not in LANGUAGE_FRAMEWORKS:
+        print("Unsupported language.")
+        sys.exit(1)
+    
+    print(f"\nAvailable frameworks for {language}:")
+    for i, framework in enumerate(LANGUAGE_FRAMEWORKS[language], 1):
+        print(f"{i}. {framework}")
+    
+    while True:
+        choice = input("\nSelect a framework (enter the number): ")
+        try:
+            index = int(choice) - 1
+            if 0 <= index < len(LANGUAGE_FRAMEWORKS[language]):
+                framework = LANGUAGE_FRAMEWORKS[language][index]
+                break
+            else:
+                print("Invalid choice. Please try again.")
+        except ValueError:
+            print("Please enter a valid number.")
+    
+    print(f"\nSelected framework: {framework}")
+    
     if language == "python":
-        setup_python_environment()
+        setup_python_environment(framework)
     elif language in ["javascript", "typescript"]:
-        setup_js_environment(language)
+        setup_js_environment(language, framework)
     elif language == "c#":
         check_and_install_dotnet()
     elif language == "java":
@@ -242,9 +275,8 @@ def setup_environment_for_language(language):
         install_php()
     elif language == "go":
         install_go()
-    else:
-        print("Unsupported language.")
-        sys.exit(1)
+    
+    return framework
 
 def setup_python_environment():
     """Set up the Python environment."""
@@ -257,164 +289,414 @@ def setup_js_environment(language):
     install_node()
     install_yeoman_and_generator()
 
-def create_server_code(language):
-    """Create server code based on the specified language."""
-    if language == "ruby":
-        create_ruby_server_code()
-    elif language == "php":
-        create_php_server_code()
-    elif language == "go":
-        create_go_server_code()
-    elif language == "python":
-        create_python_server_code()
+def create_server_code(language, framework):
+    """Create server code based on the specified language and framework."""
+    if language == "python":
+        create_python_server_code(framework)
     elif language in ["javascript", "typescript"]:
-        create_js_server_code(language)
+        create_js_server_code(language, framework)
     elif language == "c#":
-        create_csharp_server_code()
+        create_csharp_server_code(framework)
     elif language == "java":
-        create_java_server_code()
+        create_java_server_code(framework)
+    elif language == "ruby":
+        create_ruby_server_code(framework)
+    elif language == "php":
+        create_php_server_code(framework)
+    elif language == "go":
+        create_go_server_code(framework)
     else:
-        print("Unsupported language.")
+        print(f"Unsupported language: {language}")
         sys.exit(1)
 
-def create_ruby_server_code():
-    """Create a basic Ruby server code."""
-    server_code = """
-require 'webrick'
-
-server = WEBrick::HTTPServer.new :Port => 8000, :DocumentRoot => Dir.pwd
-
-server.mount_proc '/' do |req, res|
-  res.body = 'Hello, Ruby server!'
-end
-
-trap 'INT' do server.shutdown end
-
-server.start
-"""
-    with open("server.rb", "w") as file:
-        file.write(server_code)
-
-def create_php_server_code():
-    """Create a basic PHP server code."""
-    server_code = """
-<?php
-// A basic PHP server script
-echo "Hello, PHP server!";
-?>
-"""
-    with open("server.php", "w") as file:
-        file.write(server_code)
-
-def create_go_server_code():
-    """Create a basic Go server code."""
-    server_code = """
-package main
-
-import (
-    "fmt"
-    "net/http"
-)
-
-func handler(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(w, "Hello, Go server!")
-}
-
-func main() {
-    http.HandleFunc("/", handler)
-    http.ListenAndServe(":8080", nil)
-}
-"""
-    with open("server.go", "w") as file:
-        file.write(server_code)
-
-def create_python_server_code():
-    """Create a basic Python server code."""
-    server_code = """
-from flask import Flask, request, jsonify
+def create_python_server_code(framework):
+    """Create a Python server code based on the selected framework."""
+    if framework == "Flask":
+        server_code = """
+from flask import Flask
 
 app = Flask(__name__)
 
 @app.route('/')
 def hello():
-    return 'Hello, Python server!'
+    return 'Hello, Flask server!'
 
 if __name__ == '__main__':
     app.run(debug=True)
 """
+    elif framework == "Django":
+        server_code = """
+# myproject/urls.py
+from django.http import HttpResponse
+from django.urls import path
+
+def hello(request):
+    return HttpResponse("Hello, Django server!")
+
+urlpatterns = [
+    path('', hello, name='hello'),
+]
+
+# Note: You'll need to set up a proper Django project structure
+"""
+    elif framework == "FastAPI":
+        server_code = """
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"message": "Hello, FastAPI server!"}
+"""
+    else:
+        server_code = f"# Add {framework}-specific code here"
+
     with open("server.py", "w") as file:
         file.write(server_code)
 
-def create_js_server_code(language):
-    """Create a basic JavaScript or TypeScript server code."""
-    if language == "javascript":
+def create_js_server_code(language, framework):
+    """Create a JavaScript or TypeScript server code based on the selected framework."""
+    if framework == "Express":
         server_code = """
-const http = require('http');
+const express = require('express');
+const app = express();
+const port = 3000;
 
-const server = http.createServer((req, res) => {
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/plain');
-  res.end('Hello, JavaScript server!');
+app.get('/', (req, res) => {
+  res.send('Hello, Express server!');
 });
 
-server.listen(3000, () => {
-  console.log('Server running at http://127.0.0.1:3000/');
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}/`);
 });
 """
-        with open("server.js", "w") as file:
-            file.write(server_code)
-    elif language == "typescript":
+    elif framework == "Koa":
         server_code = """
-import * as http from 'http';
+const Koa = require('koa');
+const app = new Koa();
 
-const server = http.createServer((req, res) => {
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/plain');
-  res.end('Hello, TypeScript server!');
+app.use(async ctx => {
+  ctx.body = 'Hello, Koa server!';
 });
 
-server.listen(3000, () => {
-  console.log('Server running at http://127.0.0.1:3000/');
-});
+app.listen(3000);
 """
-        with open("server.ts", "w") as file:
-            file.write(server_code)
+    elif framework == "Hapi":
+        server_code = """
+const Hapi = require('@hapi/hapi');
 
-def create_csharp_server_code():
-    """Create a basic C# server code."""
-    server_code = """
-using System;
-using System.Threading.Tasks;
+const init = async () => {
+    const server = Hapi.server({
+        port: 3000,
+        host: 'localhost'
+    });
+
+    server.route({
+        method: 'GET',
+        path: '/',
+        handler: (request, h) => {
+            return 'Hello, Hapi server!';
+        }
+    });
+
+    await server.start();
+    console.log('Server running on %s', server.info.uri);
+};
+
+process.on('unhandledRejection', (err) => {
+    console.log(err);
+    process.exit(1);
+});
+
+init();
+"""
+    elif framework == "Nest.js":
+        server_code = """
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+bootstrap();
+"""
+    else:
+        server_code = f"// Add {framework}-specific code here"
+
+    file_extension = "ts" if language == "typescript" else "js"
+    with open(f"server.{file_extension}", "w") as file:
+        file.write(server_code)
+
+def create_csharp_server_code(framework):
+    """Create a C# server code based on the selected framework."""
+    if framework == "ASP.NET Core":
+        server_code = """
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 
 public class Program
 {
-    public static async Task Main(string[] args)
+    public static void Main(string[] args)
     {
-        var host = Host.CreateDefaultBuilder(args)
+        CreateHostBuilder(args).Build().Run();
+    }
+
+    public static IHostBuilder CreateHostBuilder(string[] args) =>
+        Host.CreateDefaultBuilder(args)
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.Configure(app =>
                 {
-                    app.Run(async context =>
+                    app.UseRouting();
+                    app.UseEndpoints(endpoints =>
                     {
-                        await context.Response.WriteAsync("Hello, C# server!");
+                        endpoints.MapGet("/", async context =>
+                        {
+                            await context.Response.WriteAsync("Hello, ASP.NET Core server!");
+                        });
                     });
                 });
-            })
-            .Build();
+            });
+}
+"""
+    elif framework == "Nancy":
+        server_code = """
+using Nancy;
+using Nancy.Hosting.Self;
 
-        await host.RunAsync();
+public class HelloModule : NancyModule
+{
+    public HelloModule()
+    {
+        Get("/", _ => "Hello, Nancy server!");
+    }
+}
+
+public class Program
+{
+    public static void Main(string[] args)
+    {
+        using (var host = new NancyHost(new Uri("http://localhost:3000")))
+        {
+            host.Start();
+            Console.WriteLine("Nancy server running on http://localhost:3000");
+            Console.ReadLine();
+        }
     }
 }
 """
+    else:
+        server_code = f"// Add {framework}-specific code here"
+
     with open("Program.cs", "w") as file:
         file.write(server_code)
 
-def create_java_server_code():
+def create_java_server_code(framework):
+    """Create a Java server code based on the selected framework."""
+    if framework == "Spring Boot":
+        server_code = """
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@SpringBootApplication
+@RestController
+public class Application {
+
+    @GetMapping("/")
+    public String hello() {
+        return "Hello, Spring Boot server!";
+    }
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+}
+"""
+    elif framework == "Quarkus":
+        server_code = """
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/")
+public class GreetingResource {
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello() {
+        return "Hello, Quarkus server!";
+    }
+}
+"""
+    elif framework == "Micronaut":
+        server_code = """
+import io.micronaut.http.annotation.*;
+import io.micronaut.http.MediaType;
+
+@Controller("/")
+public class HelloController {
+
+    @Get(produces = MediaType.TEXT_PLAIN)
+    public String index() {
+        return "Hello, Micronaut server!";
+    }
+}
+"""
+    else:
+        server_code = f"// Add {framework}-specific code here"
+
+    with open("Application.java", "w") as file:
+        file.write(server_code)
+
+def create_ruby_server_code(framework):
+    """Create a Ruby server code based on the selected framework."""
+    if framework == "Ruby on Rails":
+        server_code = """
+# config/routes.rb
+Rails.application.routes.draw do
+  root 'application#hello'
+end
+
+# app/controllers/application_controller.rb
+class ApplicationController < ActionController::Base
+  def hello
+    render plain: "Hello, Ruby on Rails server!"
+  end
+end
+"""
+    elif framework == "Sinatra":
+        server_code = """
+require 'sinatra'
+
+get '/' do
+  'Hello, Sinatra server!'
+end
+"""
+    else:
+        server_code = f"# Add {framework}-specific code here"
+
+    with open("server.rb", "w") as file:
+        file.write(server_code)
+
+def create_php_server_code(framework):
+    """Create a PHP server code based on the selected framework."""
+    if framework == "Laravel":
+        server_code = """
+<?php
+
+use Illuminate\Support\Facades\Route;
+
+Route::get('/', function () {
+    return 'Hello, Laravel server!';
+});
+"""
+    elif framework == "Symfony":
+        server_code = """
+<?php
+
+namespace App\Controller;
+
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Annotation\Route;
+
+class HelloController
+{
+    #[Route('/')]
+    public function index(): Response
+    {
+        return new Response('Hello, Symfony server!');
+    }
+}
+"""
+    elif framework == "Slim":
+        server_code = """
+<?php
+
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\Factory\AppFactory;
+
+require __DIR__ . '/vendor/autoload.php';
+
+$app = AppFactory::create();
+
+$app->get('/', function (Request $request, Response $response, $args) {
+    $response->getBody()->write("Hello, Slim server!");
+    return $response;
+});
+
+$app->run();
+"""
+    else:
+        server_code = f"<?php\n// Add {framework}-specific code here\n"
+
+    with open("server.php", "w") as file:
+        file.write(server_code)
+
+def create_go_server_code(framework):
+    """Create a Go server code based on the selected framework."""
+    if framework == "Gin":
+        server_code = """
+package main
+
+import (
+	"github.com/gin-gonic/gin"
+	"net/http"
+)
+
+func main() {
+	r := gin.Default()
+	r.GET("/", func(c *gin.Context) {
+		c.String(http.StatusOK, "Hello, Gin server!")
+	})
+	r.Run()
+}
+"""
+    elif framework == "Echo":
+        server_code = """
+package main
+
+import (
+	"github.com/labstack/echo/v4"
+	"net/http"
+)
+
+func main() {
+	e := echo.New()
+	e.GET("/", func(c echo.Context) error {
+		return c.String(http.StatusOK, "Hello, Echo server!")
+	})
+	e.Logger.Fatal(e.Start(":8080"))
+}
+"""
+    elif framework == "Fiber":
+        server_code = """
+package main
+
+import "github.com/gofiber/fiber/v2"
+
+func main() {
+    app := fiber.New()
+
+    app.Get("/", func(c *fiber.Ctx) error {
+        return c.SendString("Hello, Fiber server!")
+    })
+
+    app.Listen(":3000")
+}
+"""
+    else:
+        server_code = f"// Add {framework}-specific code here"
+
+    with open("server.go", "w") as file:
+        file.write(server_code)
     """Create a basic Java server code."""
     server_code = """
 import com.sun.net.httpserver.HttpServer;
@@ -454,23 +736,41 @@ def process_command(command):
     elif command.lower() == 'create':
         # Run the extension creation process
         extension_name = input("Enter the extension name: ")
-        language = input("Enter the language for the server (python, javascript, typescript, c#, java, ruby, php, go): ").strip().lower()
+        extension_description = input("Enter a brief description of the extension: ")
+        
+        print("\nAvailable languages:")
+        for i, lang in enumerate(LANGUAGE_FRAMEWORKS.keys(), 1):
+            print(f"{i}. {lang}")
+        
+        while True:
+            lang_choice = input("\nSelect a language (enter the number): ")
+            try:
+                lang_index = int(lang_choice) - 1
+                if 0 <= lang_index < len(LANGUAGE_FRAMEWORKS):
+                    language = list(LANGUAGE_FRAMEWORKS.keys())[lang_index]
+                    break
+                else:
+                    print("Invalid choice. Please try again.")
+            except ValueError:
+                print("Please enter a valid number.")
+        
+        print(f"\nSelected language: {language}")
         
         try:
-            setup_environment_for_language(language)
+            framework = setup_environment_for_language(language)
         except Exception as e:
             print(f"Error setting up environment: {e}")
             return True
 
-        create_extension_project(extension_name)
+        create_extension_project(extension_name, extension_description)
         
         try:
-            create_server_code(language)
+            create_server_code(language, framework)
         except Exception as e:
             print(f"Error creating server code: {e}")
             return True
 
-        print("Setup complete!")
+        print("\nSetup complete!")
     else:
         # Execute the command in the current process
         try:
@@ -503,7 +803,7 @@ def main():
     
     while True:
         current_dir = os.getcwd()
-        user_input = input(f"{current_dir}> ")
+        user_input = input(f"\n{current_dir}> ")
         if not process_command(user_input):
             break
 
