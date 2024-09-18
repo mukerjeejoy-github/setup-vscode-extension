@@ -4,6 +4,7 @@ import sys
 import platform
 import time
 import shutil
+import shlex
 
 def run_command(command, cwd=None, stream_output=False):
     """Run a shell command and print its output."""
@@ -72,6 +73,16 @@ def install_yeoman_and_generator():
     if result != 0:
         print("Failed to install Yeoman and generator-code.")
         sys.exit(result)
+    
+    # Verify installation
+    yo_path = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", "npm", "node_modules", "yo", "lib", "cli.js")
+    if os.path.exists(yo_path):
+        print(f"Yeoman installed successfully at: {yo_path}")
+    else:
+        print("Yeoman installation not found. Please check your npm configuration.")
+        sys.exit(1)
+    
+    print("Yeoman and VSCode Extension Generator installed successfully.")
 
 def install_maven():
     """Check if Maven is installed, and if not, install it."""
@@ -161,43 +172,59 @@ def generate_extension_name_and_identifier(extension_name):
 def create_extension_project(extension_name):
     """Generate a new VSCode extension project using Yeoman."""
     print(f"Creating VSCode extension project '{extension_name}'...")
-    os.makedirs(extension_name, exist_ok=True)
-    os.chdir(extension_name)
-    
+    try:
+        os.makedirs(extension_name, exist_ok=True)
+        os.chdir(extension_name)
+    except Exception as e:
+        print(f"Error creating or changing to directory: {e}")
+        return
+
     extension_name, identifier = generate_extension_name_and_identifier(extension_name)
     
     print(f"Generated extension name: {extension_name}")
     print(f"Generated extension identifier: {identifier}")
     
+    # Use Node.js to run Yeoman
+    node_path = shutil.which("node")
+    if node_path is None:
+        print("Error: Node.js not found. Please ensure Node.js is installed and in your PATH.")
+        return
+
+    yo_path = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", "npm", "node_modules", "yo", "lib", "cli.js")
+    if not os.path.exists(yo_path):
+        print(f"Error: Yeoman CLI not found at expected path: {yo_path}")
+        print("Please ensure Yeoman is installed globally using 'npm install -g yo generator-code'")
+        return
+
     # Construct the command with correct flags
-    command = f'yo code --type=ext-language-server --extensionName="{extension_name}" --extensionDisplayName="{extension_name}" --extensionDescription="A new VSCode extension" --extensionIdentifier="{identifier}" --gitInit=false --pkgManager=npm'
+    command = f'"{node_path}" "{yo_path}" code --type=ext-language-server --extensionName="{extension_name}" --extensionDisplayName="{extension_name}" --extensionDescription="A new VSCode extension" --extensionIdentifier="{identifier}" --gitInit=false --pkgManager=npm'
     
-    # Print command for debugging
     print(f"Executing command: {command}")
 
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="ignore")
-    
-    spinning_cursor = ['|', '/', '-', '\\']
-    idx = 0
-    last_update = time.time()
-    
-    while True:
-        output = process.stdout.readline()
-        if output == '' and process.poll() is not None:
-            break
-        if output:
-            print(output.strip())
-        else:
-            if time.time() - last_update > 0.5:  # Update every 0.5 seconds
-                print(f"\rWaiting for Yeoman to complete... {spinning_cursor[idx]} ", end='', flush=True)
-                idx = (idx + 1) % len(spinning_cursor)
-                last_update = time.time()
-    
-    print("\rYeoman command completed.                 ")
-    
-    if process.returncode != 0:
-        print("Failed to create VSCode extension project.")
-        sys.exit(process.returncode)
+    try:
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="ignore")
+        
+        output = []
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+            if line:
+                print(line.strip())
+                output.append(line.strip())
+
+        if process.returncode != 0:
+            print(f"Yeoman process exited with non-zero status: {process.returncode}")
+            print("Last few lines of output:")
+            print("\n".join(output[-10:]))  # Print the last 10 lines of output
+            return
+
+        print("VSCode extension project created successfully.")
+    except Exception as e:
+        print(f"Error during extension project creation: {e}")
+        return
+
+    print("Project creation completed.")
 
 def setup_environment_for_language(language):
     """Set up the environment based on the language chosen."""
@@ -419,13 +446,68 @@ public class SimpleHttpServer {
     with open("SimpleHttpServer.java", "w") as file:
         file.write(server_code)
 
+
+def process_command(command):
+    """Process user commands."""
+    if command.lower() == 'exit':
+        return False
+    elif command.lower() == 'create':
+        # Run the extension creation process
+        extension_name = input("Enter the extension name: ")
+        language = input("Enter the language for the server (python, javascript, typescript, c#, java, ruby, php, go): ").strip().lower()
+        
+        try:
+            setup_environment_for_language(language)
+        except Exception as e:
+            print(f"Error setting up environment: {e}")
+            return True
+
+        create_extension_project(extension_name)
+        
+        try:
+            create_server_code(language)
+        except Exception as e:
+            print(f"Error creating server code: {e}")
+            return True
+
+        print("Setup complete!")
+    else:
+        # Execute the command in the current process
+        try:
+            args = shlex.split(command)
+            if args[0] == 'cd':
+                if len(args) > 1:
+                    os.chdir(args[1])
+                else:
+                    print(f"Current directory: {os.getcwd()}")
+            elif args[0] == 'pwd':
+                print(os.getcwd())
+            else:
+                os.system(command)
+        except FileNotFoundError:
+            print(f"Directory not found: {args[1]}")
+        except PermissionError:
+            print(f"Permission denied: {args[1]}")
+        except Exception as e:
+            print(f"Error executing command: {e}")
+    return True
+
 def main():
-    extension_name = input("Enter the extension name: ")
-    language = input("Enter the language for the server (python, javascript, typescript, c#, java, ruby, php, go): ").strip().lower()
-    setup_environment_for_language(language)
-    create_extension_project(extension_name) 
-    create_server_code(language)
-    print("Setup complete!")
+    print("Welcome to the VSCode Extension Creator Command Prompt!")
+    print("Available custom commands:")
+    print("  create  - Start the extension creation process")
+    print("  cd      - Change directory")
+    print("  pwd     - Print working directory")
+    print("  exit    - Exit the program")
+    print("All standard system commands are also available.")
+    
+    while True:
+        current_dir = os.getcwd()
+        user_input = input(f"{current_dir}> ")
+        if not process_command(user_input):
+            break
+
+    print("Thank you for using VSCode Extension Creator!")
 
 if __name__ == "__main__":
     main()
